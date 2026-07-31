@@ -10,6 +10,7 @@ import {
 import FestivalDetailInfo from '../features/festivals/FestivalDetailInfo.jsx';
 import AiSummaryBox from '../features/bookmarks/AiSummaryBox.jsx';
 import BookmarkButton from '../features/bookmarks/BookmarkButton.jsx';
+import FestivalReviews from '../features/festivals/FestivalReviews.jsx';
 
 
 const DetailPage = () => {
@@ -119,6 +120,7 @@ const DetailPage = () => {
                 summary={festival?.aiInfo?.split('\n') || []}
                 loading={isLoading}
               />
+              <FestivalReviews festivalId={festivalId} />
               <BookmarkSection>
                 <BookmarkButtonWrapper
                   isBookmarked={festival?.bookmarked || false}
