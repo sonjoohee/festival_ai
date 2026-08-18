@@ -28,12 +28,18 @@ public class FestivalEntity {
 
     private String addr;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String aiInfo;
 
     @Column(name = "image_url")
     private String imageUrl;
+
+    @Column(name = "start_date", length = 8)
+    private String startDate;
+
+    @Column(name = "end_date", length = 8)
+    private String endDate;
 }
