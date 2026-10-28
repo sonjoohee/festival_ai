@@ -14,29 +14,32 @@ const LoginForm = () => {
   const { login: setAuth } = useAuth();
   const navigate = useNavigate();
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setLoading(true);
+    try {
+      const body = await login({ loginId: email, password });
 
-  try {
-    const { data } = await login({ loginId: email, password }); 
-    
-    if (data && data.token) {
-      setAuth(data.token); 
-      navigate('/'); 
-    } else {
-      setError('서버 응답 형식이 올바르지 않습니다.');
+      if (body?.status === 'success' && body?.data?.token) {
+        setAuth({
+          token: body.data.token,
+          loginId: email,
+          userId: body.data.userId,
+          name: body.data.name,
+        });
+        navigate('/');
+      } else {
+        setError('서버 응답 형식이 올바르지 않습니다.');
+      }
+    } catch (err) {
+      console.error('프론트엔드 함수 내부 에러:', err);
+      setError(err.response?.data?.message || '로그인에 실패했습니다.');
+    } finally {
+      setLoading(false);
     }
-
-  } catch (err) {
-    console.error("프론트엔드 함수 내부 에러:", err);
-    setError(err.response?.data?.message || '로그인에 실패했습니다.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <>
