@@ -1,36 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import useAuthStore from '../stores/authStore';
 
 const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const token = useAuthStore((state) => state.token);
+  const loginId = useAuthStore((state) => state.loginId);
+  const userId = useAuthStore((state) => state.userId);
+  const name = useAuthStore((state) => state.name);
+  const hasHydrated = useAuthStore((state) => state._hasHydrated);
+  const login = useAuthStore((state) => state.login);
+  const logout = useAuthStore((state) => state.logout);
 
-
-  useEffect(() => {
-      const checkAuth = () => {
-        const token = localStorage.getItem('token');
-        if (token) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
-        setIsLoading(false);
-      };
-
-      checkAuth();
-    }, []); 
-
-
-  const login = useCallback((token) => {
-    localStorage.setItem('token', token);
-    setIsAuthenticated(true);
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    setIsAuthenticated(false);
-  }, []);
-
-  return { isAuthenticated, isLoading, login, logout };
+  return {
+    isAuthenticated: Boolean(token),
+    isLoading: !hasHydrated,
+    loginId,
+    userId,
+    name,
+    login,
+    logout,
+  };
 };
 
 export default useAuth;

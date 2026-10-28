@@ -1,34 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import styled from 'styled-components';
 import { FaStar } from 'react-icons/fa';
-import { 
-  getReviewsByFestival,
-  postReview as apiPostReview,
-  updateReview as apiUpdateReview,
-  deleteReview as apiDeleteReview,
-} from '../../api/reviewsApi';
-// import { useAuth } from '../../contexts/AuthContext'; // Assume AuthContext provides user info
-
-// Mock API functions - replace with actual API calls
-const getReviews = async (festivalId, page = 1, limit = 5) => {
-  console.log(`Fetching reviews for festival ${festivalId}, page: ${page}, limit: ${limit}`);
-  try {
-    const response = await getReviewsByFestival(festivalId, { page: page - 1, limit });
-    console.log('API Response:', response.data);
-    // API 응답을 프론트엔드 형식에 맞게 변환
-    return {
-      reviews: response.data.content,
-      totalPages: response.data.totalPages,
-      currentPage: response.data.number + 1,
-      totalReviews: response.data.totalElements,
-      averageRating: response.data.averageRating || 0, // 백엔드 응답에 평균 평점이 없다면 0으로 처리
-    };
-  } catch (error) {
-    console.error("Failed to fetch reviews:", error);
-    // 에러 발생 시 빈 데이터 반환
-    return { reviews: [], totalPages: 0, currentPage: 1, totalReviews: 0, averageRating: 0 };
-  }
-};
+import { useQuery } from '@tanstack/react-query';
+import useAuth from '../../hooks/useAuth';
+import { fetchFestivalReviews } from './fetchFestivalReviews';
+import { reviewKeys } from './reviewQueryKeys';
+import { useFestivalReviewMutations } from './useFestivalReviewMutations';
 
 const StarRating = ({ rating }) => (
   <StarContainer>
@@ -39,48 +16,46 @@ const StarRating = ({ rating }) => (
 );
 
 const FestivalReviews = ({ festivalId }) => {
-  // const { user } = useAuth(); // 실제 앱에서는 Context API 등에서 사용자 정보를 가져옵니다.
-  const user = { userId: 123, nickname: '행복한가족' }; // UI 테스트를 위한 모의 사용자
-  const [reviews, setReviews] = useState([]);
-  const [stats, setStats] = useState({ total: 0, avg: 0 });
+  const { loginId, isAuthenticated } = useAuth();
   const [newReview, setNewReview] = useState({ rating: 0, comment: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userHasReviewed, setUserHasReviewed] = useState(false);
-
   const [editingReviewId, setEditingReviewId] = useState(null);
   const [editedContent, setEditedContent] = useState({ rating: 0, comment: '' });
 
-  const fetchReviews = async () => {
-    try {
-      const response = await getReviews(festivalId);
-      setReviews(response.reviews);
-      setUserHasReviewed(response.reviews.some(r => r.author === user.nickname));
-      setStats({ total: response.totalReviews, avg: response.averageRating });
-    } catch (error) {
-      console.error("Failed to fetch reviews:", error);
-    }
+  const { data, isLoading, isError } = useQuery({
+    queryKey: reviewKeys.byFestival(festivalId),
+    queryFn: () => fetchFestivalReviews(festivalId),
+    enabled: Boolean(festivalId),
+  });
+
+  const { createMutation, updateMutation, deleteMutation } =
+    useFestivalReviewMutations(festivalId);
+
+  const reviews = data?.reviews ?? [];
+  const stats = {
+    total: data?.totalReviews ?? 0,
+    avg: data?.averageRating ?? 0,
   };
 
-  useEffect(() => {
-    fetchReviews();
-  }, [festivalId]);
-  
+  const userHasReviewed =
+    isAuthenticated &&
+    Boolean(loginId) &&
+    reviews.some((review) => review.author === loginId);
+
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
     if (newReview.rating === 0 || !newReview.comment.trim()) {
       alert('별점과 후기 내용을 모두 입력해주세요.');
       return;
     }
-    setIsSubmitting(true);
     try {
-      await apiPostReview(Number(festivalId), newReview); // festivalId를 경로 파라미터로, newReview를 본문으로 전달
+      await createMutation.mutateAsync(newReview);
       setNewReview({ rating: 0, comment: '' });
-      await fetchReviews(); // 리뷰 목록 새로고침
     } catch (error) {
-      console.error("Failed to post review:", error);
-      alert('후기 작성에 실패했습니다.');
-    } finally {
-      setIsSubmitting(false);
+      console.error('Failed to post review:', error);
+      alert(
+        error.response?.data?.message ||
+          '후기 작성에 실패했습니다. 이미 작성한 후기가 있는지 확인해주세요.',
+      );
     }
   };
 
@@ -100,76 +75,125 @@ const FestivalReviews = ({ festivalId }) => {
       return;
     }
     try {
-      await apiUpdateReview(reviewId, editedContent);
-      await fetchReviews(); // 리뷰 목록 새로고침
+      await updateMutation.mutateAsync({
+        reviewId,
+        updateData: editedContent,
+      });
       handleCancelEdit();
     } catch (error) {
-      console.error("Failed to update review:", error);
+      console.error('Failed to update review:', error);
       alert('후기 수정에 실패했습니다.');
     }
   };
 
   const handleDelete = async (reviewId) => {
     // eslint-disable-next-line no-restricted-globals
-    if (confirm('정말로 후기를 삭제하시겠습니까?')) {
-      try {
-        await apiDeleteReview(reviewId);
-        await fetchReviews(); // 리뷰 목록 새로고침
-      } catch (error) {
-        console.error("Failed to delete review:", error);
-        alert('후기 삭제에 실패했습니다.');
-      }
+    if (!confirm('정말로 후기를 삭제하시겠습니까?')) {
+      return;
+    }
+    try {
+      await deleteMutation.mutateAsync(reviewId);
+    } catch (error) {
+      console.error('Failed to delete review:', error);
+      alert('후기 삭제에 실패했습니다.');
     }
   };
 
-  const renderStarInput = (rating, onRatingChange) => (
+  const renderStarInput = (rating, onRatingChange) =>
     [...Array(5)].map((_, i) => {
       const ratingValue = i + 1;
-      return <FaStar key={i} size={24} color={ratingValue <= rating ? '#ffc107' : '#e4e5e9'} onClick={() => onRatingChange(ratingValue)} style={{ cursor: 'pointer' }} />;
-    })
-  );
+      return (
+        <FaStar
+          key={i}
+          size={24}
+          color={ratingValue <= rating ? '#ffc107' : '#e4e5e9'}
+          onClick={() => onRatingChange(ratingValue)}
+          style={{ cursor: 'pointer' }}
+        />
+      );
+    });
+
+  if (isLoading) {
+    return (
+      <ReviewContainer>
+        <Title>방문 후기</Title>
+        <LoadingMessage>후기를 불러오는 중...</LoadingMessage>
+      </ReviewContainer>
+    );
+  }
+
+  if (isError) {
+    return (
+      <ReviewContainer>
+        <Title>방문 후기</Title>
+        <LoadingMessage>후기를 불러오지 못했습니다.</LoadingMessage>
+      </ReviewContainer>
+    );
+  }
 
   return (
     <ReviewContainer>
-      <Title>방문 후기 <Count>({stats.total})</Count></Title>
+      <Title>
+        방문 후기 <Count>({stats.total})</Count>
+      </Title>
       {stats.total > 0 && (
         <AverageSection>
-          <StarRating rating={stats.avg} />
+          <StarRating rating={Math.round(stats.avg)} />
           <AverageText>{stats.avg.toFixed(1)} / 5.0</AverageText>
         </AverageSection>
       )}
 
-      {user && !userHasReviewed && (
+      {isAuthenticated && loginId && !userHasReviewed && (
         <ReviewForm onSubmit={handleReviewSubmit}>
           <StarRatingInput>
-            {renderStarInput(newReview.rating, (rating) => setNewReview({ ...newReview, rating }))}
+            {renderStarInput(newReview.rating, (rating) =>
+              setNewReview({ ...newReview, rating }),
+            )}
           </StarRatingInput>
           <ReviewTextarea
             placeholder="생생한 후기를 남겨주세요! (예: 아이와 함께 갈 때 꿀팁)"
             value={newReview.comment}
-            onChange={(e) => setNewReview({...newReview, comment: e.target.value})}
+            onChange={(e) =>
+              setNewReview({ ...newReview, comment: e.target.value })
+            }
           />
-          <SubmitButton type="submit" disabled={isSubmitting}>
-            {isSubmitting ? '등록 중...' : '후기 등록'}
+          <SubmitButton type="submit" disabled={createMutation.isPending}>
+            {createMutation.isPending ? '등록 중...' : '후기 등록'}
           </SubmitButton>
         </ReviewForm>
       )}
 
       <ReviewList>
-        {reviews.map(review => (
+        {reviews.map((review) =>
           editingReviewId === review.reviewId ? (
             <ReviewItem key={review.reviewId}>
               <EditForm>
                 <StarRatingInput>
-                  {renderStarInput(editedContent.rating, (rating) => setEditedContent({ ...editedContent, rating }))}
+                  {renderStarInput(editedContent.rating, (rating) =>
+                    setEditedContent({ ...editedContent, rating }),
+                  )}
                 </StarRatingInput>
                 <ReviewTextarea
                   value={editedContent.comment}
-                  onChange={(e) => setEditedContent({ ...editedContent, comment: e.target.value })}
+                  onChange={(e) =>
+                    setEditedContent({
+                      ...editedContent,
+                      comment: e.target.value,
+                    })
+                  }
                 />
                 <ButtonGroup>
-                  <EditButton type="button" onClick={handleCancelEdit}>취소</EditButton>
-                  <EditButton type="button" $primary onClick={() => handleUpdateSubmit(review.reviewId)}>저장</EditButton>
+                  <EditButton type="button" onClick={handleCancelEdit}>
+                    취소
+                  </EditButton>
+                  <EditButton
+                    type="button"
+                    $primary
+                    onClick={() => handleUpdateSubmit(review.reviewId)}
+                    disabled={updateMutation.isPending}
+                  >
+                    저장
+                  </EditButton>
                 </ButtonGroup>
               </EditForm>
             </ReviewItem>
@@ -182,16 +206,23 @@ const FestivalReviews = ({ festivalId }) => {
               <p>{review.comment}</p>
               <ReviewFooter>
                 <small>{new Date(review.createdAt).toLocaleDateString()}</small>
-                {user?.nickname === review.author && (
+                {loginId && loginId === review.author && (
                   <ButtonGroup>
-                    <EditButton onClick={() => handleEditClick(review)}>수정</EditButton>
-                    <EditButton onClick={() => handleDelete(review.reviewId)}>삭제</EditButton>
+                    <EditButton onClick={() => handleEditClick(review)}>
+                      수정
+                    </EditButton>
+                    <EditButton
+                      onClick={() => handleDelete(review.reviewId)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      삭제
+                    </EditButton>
                   </ButtonGroup>
                 )}
               </ReviewFooter>
             </ReviewItem>
-          )
-        ))}
+          ),
+        )}
       </ReviewList>
     </ReviewContainer>
   );
@@ -203,7 +234,7 @@ const ReviewContainer = styled.div`
   background-color: #fff;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 `;
 
 const Title = styled.h3`
@@ -214,6 +245,11 @@ const Title = styled.h3`
 
 const Count = styled.span`
   color: ${({ theme }) => theme.colors.primary};
+`;
+
+const LoadingMessage = styled.p`
+  color: #888;
+  font-size: 0.95rem;
 `;
 
 const AverageSection = styled.div`
@@ -238,7 +274,9 @@ const StarRatingInput = styled.div`
   display: flex;
   gap: 4px;
   margin-bottom: 12px;
-  & svg { cursor: pointer; }
+  & svg {
+    cursor: pointer;
+  }
 `;
 
 const ReviewTextarea = styled.textarea`
@@ -260,7 +298,13 @@ const SubmitButton = styled.button`
   color: white;
   font-weight: 700;
   cursor: pointer;
-  &:hover { background-color: #a04825; }
+  &:hover {
+    background-color: #a04825;
+  }
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
 `;
 
 const ReviewList = styled.div`
@@ -297,12 +341,16 @@ const ButtonGroup = styled.div`
 const EditButton = styled.button`
   background: none;
   border: none;
-  color: ${({ theme, $primary }) => $primary ? theme.colors.primary : '#888'};
+  color: ${({ theme, $primary }) => ($primary ? theme.colors.primary : '#888')};
   cursor: pointer;
   font-size: 0.9rem;
   padding: 4px;
   &:hover {
     text-decoration: underline;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 `;
 
@@ -310,7 +358,6 @@ const EditForm = styled.div`
   display: flex;
   flex-direction: column;
 `;
-
 
 const StarContainer = styled.div`
   display: flex;
