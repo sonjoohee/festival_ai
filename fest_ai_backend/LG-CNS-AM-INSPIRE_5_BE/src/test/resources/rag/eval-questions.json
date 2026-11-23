@@ -1,0 +1,8 @@
+[
+  { "question": "찜하기는 어떻게 해?", "expect": "answer", "sourceId": "service-faq.md" },
+  { "question": "후기는 아무나 쓸 수 있어?", "expect": "answer", "sourceId": "service-faq.md" },
+  { "question": "축제 정보는 어디서 가져와?", "expect": "answer", "sourceId": "service-faq.md" },
+  { "question": "오늘 달러 환율 얼마야?", "expect": "no_info" },
+  { "question": "파이썬 리스트 정렬하는 법 알려줘", "expect": "no_info" },
+  { "question": "내일 서울 날씨 어때?", "expect": "no_info" }
+]

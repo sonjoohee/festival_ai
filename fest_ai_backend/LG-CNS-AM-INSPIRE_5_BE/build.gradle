@@ -66,5 +66,23 @@ dependencyManagement {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    // eval 태그는 실제 Gemini를 부르는 평가라 평소 테스트에서는 뺀다
+    useJUnitPlatform {
+        excludeTags 'eval'
+    }
+}
+
+// RAG 평가: ./gradlew evalRag (.env의 OPEN_AI_KEY와 rag-data/vector-store.json 필요)
+tasks.register('evalRag', Test) {
+    description = '평가 질문으로 기준값별 RAG 정답 수를 잰다'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'eval'
+    }
+    testLogging {
+        showStandardStreams = true
+    }
+    outputs.upToDateWhen { false }
 }
