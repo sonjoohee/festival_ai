@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -50,17 +51,31 @@ public class RagAskService {
     }
 
     public RagAskResponseDTO ask(String question) {
+        return ask(question, null);
+    }
+
+    /**
+     * @param contentId 있으면 그 축제 조각과 FAQ 안에서만 찾는다 (상세 페이지 질문창용). 없으면 전체에서 찾는다.
+     */
+    public RagAskResponseDTO ask(String question, String contentId) {
         if (vectorStoreHolder.isEmpty()) {
             log.info("RAG 질문 - 색인된 문서가 없어 바로 정보 없음으로 답함");
             return noInfo();
         }
 
         // 1. 질문과 비슷한 조각 찾기 (기준값 미만은 버림)
-        List<Document> hits = vectorStoreHolder.get().similaritySearch(SearchRequest.builder()
+        SearchRequest.Builder search = SearchRequest.builder()
                 .query(question)
                 .topK(topK)
-                .similarityThreshold(similarityThreshold)
-                .build());
+                .similarityThreshold(similarityThreshold);
+        if (contentId != null && !contentId.isBlank()) {
+            // 문자열을 이어 붙이지 않고 빌더로 만들어 contentId 값이 조건식을 깨지 못하게 한다
+            FilterExpressionBuilder b = new FilterExpressionBuilder();
+            search.filterExpression(b.or(
+                    b.eq("sourceId", contentId.strip()),
+                    b.eq("sourceType", "faq")).build());
+        }
+        List<Document> hits = vectorStoreHolder.get().similaritySearch(search.build());
         log.info("RAG 질문 - 질문 {}자, 검색된 조각 {}개, 점수 {}", question.length(), hits.size(),
                 hits.stream().map(d -> "%.3f".formatted(d.getScore())).toList());
 

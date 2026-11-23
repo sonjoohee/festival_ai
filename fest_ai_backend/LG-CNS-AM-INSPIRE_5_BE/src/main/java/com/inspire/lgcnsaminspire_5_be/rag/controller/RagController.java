@@ -33,7 +33,7 @@ public class RagController {
     @PostMapping("/ask")
     public ResponseEntity<?> ask(@Valid @RequestBody RagAskRequestDTO request) {
         try {
-            return ResponseEntity.ok(ragAskService.ask(request.getQuestion().strip()));
+            return ResponseEntity.ok(ragAskService.ask(request.getQuestion().strip(), request.getContentId()));
         } catch (RuntimeException e) {
             // 예외 메시지에는 외부 API 응답이 섞일 수 있어 클래스 이름만 남긴다
             log.error("RAG 질문 처리 실패: {}", e.getClass().getSimpleName());

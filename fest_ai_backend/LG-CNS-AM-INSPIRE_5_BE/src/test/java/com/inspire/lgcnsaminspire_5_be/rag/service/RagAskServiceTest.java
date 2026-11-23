@@ -93,6 +93,28 @@ class RagAskServiceTest {
     }
 
     @Test
+    void contentId를_주면_그_축제_조각만_찾는다() {
+        indexSamples();
+        chatModel.reply = "답변 [1]";
+
+        RagAskResponseDTO other = service.ask("보령머드축제 기간 알려줘", "200");
+        RagAskResponseDTO same = service.ask("보령머드축제 기간 알려줘", "100");
+
+        assertThat(other.isFound()).isFalse(); // 부산불꽃축제(200) 범위에는 머드축제 조각이 없다
+        assertThat(same.getSources()).extracting(s -> s.getSourceId()).containsOnly("100");
+    }
+
+    @Test
+    void contentId에_조건식_문자를_넣어도_다른_축제가_섞이지_않는다() {
+        indexSamples();
+        chatModel.reply = "답변 [1]";
+
+        RagAskResponseDTO res = service.ask("보령머드축제 기간 알려줘", "200' || sourceId == '100");
+
+        assertThat(res.isFound()).isFalse();
+    }
+
+    @Test
     void 색인_파일을_저장하고_다시_불러온다() {
         indexSamples();
         chatModel.reply = "7월 18일부터 열립니다 [1]";
