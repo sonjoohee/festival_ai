@@ -77,5 +77,3 @@ flowchart LR
 | `POST /api/rag/festivals/sync` | TourAPI에서 축제를 받아 DB에 저장 | 필요 |
 | `POST /api/rag/index` | 축제와 FAQ를 조각내 임베딩 저장 | 필요 |
 | `POST /api/rag/ask` | 질문에 답하고 출처를 함께 돌려줌 | 불필요 |
-
-**한계:** 새 축제가 저장돼도 색인은 직접 다시 만들어야 합니다.
