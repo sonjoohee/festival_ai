@@ -129,6 +129,11 @@ public class FestivalService {
             return null;
         }
 
+        // 한 번에 저장된 축제는 aiInfo가 비어 있으므로 처음 조회할 때 만든다
+        if (entity.getAiInfo() == null) {
+            entity.updateAiInfo(generateTipsSafely(entity.getTitle(), entity.getContent()));
+        }
+
         boolean isBookmarked = false;
         Long bookmarkId = null;
         if (userId != null) {
@@ -163,70 +168,89 @@ public class FestivalService {
         log.info(">>>> FestivalService findOrCreateFestival - contentId: {}", contentId);
 
         return festivalRepository.findByContentId(contentId)
-                .orElseGet(() -> {
-                    // 에러를 유발하던 Y/N 옵션 파라미터를 모두 제거하고 깨끗하게 호출
-                    String requestUrl = endPoint
-                            + "detailCommon2"
-                            + "?serviceKey=" + key
-                            + "&MobileOS=WEB"
-                            + "&MobileApp=InspireApp"
-                            + "&_type=" + type
-                            + "&contentId=" + contentId;
+                .orElseGet(() -> festivalRepository.save(fetchFromTourApi(contentId, true)));
+    }
 
-                    try {
-                        String response = restTemplate.getForObject(requestUrl, String.class);
-                        log.info(">>>> TourAPI response in findOrCreateFestival: {}", response);
+    /**
+     * DB에 없는 축제만 TourAPI 상세 정보를 받아 저장한다. AI 꿀팁은 만들지 않는다.
+     * 축제 여러 개를 한 번에 저장할 때 Gemini 호출이 축제 수만큼 늘어나지 않게 하려는 것.
+     * @return 새로 저장했으면 true, 이미 있으면 false
+     */
+    @Transactional
+    public boolean saveFromTourApiIfAbsent(String contentId) {
+        if (festivalRepository.findByContentId(contentId).isPresent()) {
+            return false;
+        }
+        festivalRepository.save(fetchFromTourApi(contentId, false));
+        return true;
+    }
 
-                        if (response != null) {
-                            JsonNode rootNode = objectMapper.readTree(response);
-                            JsonNode itemNode = rootNode.findValue("item");
+    private String generateTipsSafely(String title, String overview) {
+        try {
+            if (title != null && !title.isBlank()) {
+                return openAiService.generateFestivalTips(title, overview);
+            }
+        } catch (Exception e) {
+            log.warn(">>>> AI 가공 중 에러 발생: {}", e.getMessage());
+        }
+        return "실시간 AI 가이드 정보를 불러올 수 없습니다.";
+    }
 
-                            if (itemNode != null && itemNode.isContainerNode()) {
-                                JsonNode item = itemNode.isArray() ? itemNode.get(0) : itemNode;
+    // TourAPI detailCommon2로 축제 상세를 받아 엔티티로 만든다. 저장은 호출한 쪽에서 한다.
+    private FestivalEntity fetchFromTourApi(String contentId, boolean withAiInfo) {
+        // 에러를 유발하던 Y/N 옵션 파라미터를 모두 제거하고 깨끗하게 호출
+        String requestUrl = endPoint
+                + "detailCommon2"
+                + "?serviceKey=" + key
+                + "&MobileOS=WEB"
+                + "&MobileApp=InspireApp"
+                + "&_type=" + type
+                + "&contentId=" + contentId;
 
-                                String title = item.path("title").asText("축제 정보");
-                                String region = item.path("lDongRegnCd").asText("");
-                                if (region.isBlank()) {
-                                    region = item.path("areacode").asText("");
-                                }
-                                String imageUrl = item.path("firstimage").asText("");
-                                String addr1 = item.path("addr1").asText("");
-                                String addr2 = item.path("addr2").asText("");
-                                String fullAddr = (addr2.isBlank()) ? addr1 : String.format("%s %s", addr1, addr2);
-                                String overview = item.path("overview").asText("");
-                                String startDate = item.path("eventstartdate").asText("");
-                                String endDate = item.path("eventenddate").asText("");
+        try {
+            String response = restTemplate.getForObject(requestUrl, String.class);
+            log.info(">>>> TourAPI response in findOrCreateFestival: {}", response);
 
-                                String aiInfo = "실시간 AI 가이드 정보를 불러올 수 없습니다.";
-                                try {
-                                    if (!title.isBlank()) {
-                                        aiInfo = openAiService.generateFestivalTips(title, overview);
-                                    }
-                                } catch (Exception e) {
-                                    log.warn(">>>> AI 가공 중 에러 발생: {}", e.getMessage());
-                                }
+            if (response != null) {
+                JsonNode rootNode = objectMapper.readTree(response);
+                JsonNode itemNode = rootNode.findValue("item");
 
-                                FestivalEntity newFestival = FestivalEntity.builder()
-                                        .contentId(contentId)
-                                        .title(title.isBlank() ? "축제 정보" : title)
-                                        .region(region)
-                                        .imageUrl(imageUrl)
-                                        .addr(fullAddr)
-                                        .content(overview)
-                                        .aiInfo(aiInfo)
-                                        .startDate(startDate)
-                                        .endDate(endDate)
-                                        .build();
+                if (itemNode != null && itemNode.isContainerNode()) {
+                    JsonNode item = itemNode.isArray() ? itemNode.get(0) : itemNode;
 
-                                return festivalRepository.save(newFestival);
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.error(">>>> [ERROR] 외부 API를 통한 축제 정보 생성 실패: {}", e.getMessage());
-                        e.printStackTrace();
+                    String title = item.path("title").asText("축제 정보");
+                    String region = item.path("lDongRegnCd").asText("");
+                    if (region.isBlank()) {
+                        region = item.path("areacode").asText("");
                     }
+                    String imageUrl = item.path("firstimage").asText("");
+                    String addr1 = item.path("addr1").asText("");
+                    String addr2 = item.path("addr2").asText("");
+                    String fullAddr = (addr2.isBlank()) ? addr1 : String.format("%s %s", addr1, addr2);
+                    String overview = item.path("overview").asText("");
+                    String startDate = item.path("eventstartdate").asText("");
+                    String endDate = item.path("eventenddate").asText("");
 
-                    throw new RuntimeException("축제 정보를 찾을 수 없거나 외부 API 연동에 실패했습니다. contentId: " + contentId);
-                });
+                    String aiInfo = withAiInfo ? generateTipsSafely(title, overview) : null;
+
+                    return FestivalEntity.builder()
+                            .contentId(contentId)
+                            .title(title.isBlank() ? "축제 정보" : title)
+                            .region(region)
+                            .imageUrl(imageUrl)
+                            .addr(fullAddr)
+                            .content(overview)
+                            .aiInfo(aiInfo)
+                            .startDate(startDate)
+                            .endDate(endDate)
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            log.error(">>>> [ERROR] 외부 API를 통한 축제 정보 생성 실패: {}", e.getMessage());
+            e.printStackTrace();
+        }
+
+        throw new RuntimeException("축제 정보를 찾을 수 없거나 외부 API 연동에 실패했습니다. contentId: " + contentId);
     }
 }
