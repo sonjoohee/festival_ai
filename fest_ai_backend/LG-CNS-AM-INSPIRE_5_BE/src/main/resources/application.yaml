@@ -14,6 +14,12 @@ spring:
 
 
   ai:
+    # 모델이 바쁠 때(503, 429) 기본 10번 재시도하면 응답이 몇 분씩 늦어진다. 2번까지만 하고 실패를 돌려준다.
+    retry:
+      max-attempts: 2
+      backoff:
+        initial-interval: 1s
+        max-interval: 3s
     # Gemini를 OpenAI 호환 주소로 호출한다. 키는 .env의 OPEN_AI_KEY에 Gemini 키를 넣는다.
     # OpenAI로 되돌리려면 .env에서 OPEN_AI_BASE_URL=https://api.openai.com,
     # OPEN_AI_CHAT_PATH=/v1/chat/completions, OPEN_AI_EMBEDDING_PATH=/v1/embeddings 로 바꾼다.
@@ -23,7 +29,7 @@ spring:
       chat:
         completions-path: ${OPEN_AI_CHAT_PATH:/chat/completions}
         options:
-          model: ${OPEN_AI_MODEL:gemini-2.5-flash}
+          model: ${OPEN_AI_MODEL:gemini-3.1-flash-lite}
       embedding:
         embeddings-path: ${OPEN_AI_EMBEDDING_PATH:/embeddings}
         options:
