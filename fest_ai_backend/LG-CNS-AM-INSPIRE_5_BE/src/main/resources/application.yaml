@@ -14,11 +14,20 @@ spring:
 
 
   ai:
+    # Gemini를 OpenAI 호환 주소로 호출한다. 키는 .env의 OPEN_AI_KEY에 Gemini 키를 넣는다.
+    # OpenAI로 되돌리려면 .env에서 OPEN_AI_BASE_URL=https://api.openai.com,
+    # OPEN_AI_CHAT_PATH=/v1/chat/completions, OPEN_AI_EMBEDDING_PATH=/v1/embeddings 로 바꾼다.
     openai:
       api-key: ${OPEN_AI_KEY}
+      base-url: ${OPEN_AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
       chat:
+        completions-path: ${OPEN_AI_CHAT_PATH:/chat/completions}
         options:
-          model: ${OPEN_AI_MODEL}
+          model: ${OPEN_AI_MODEL:gemini-2.5-flash}
+      embedding:
+        embeddings-path: ${OPEN_AI_EMBEDDING_PATH:/embeddings}
+        options:
+          model: ${OPEN_AI_EMBEDDING_MODEL:gemini-embedding-001}
 
   jpa:
     hibernate:
