@@ -16,12 +16,12 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 하루 한 번 축제를 받아 오고, 바뀐 게 있을 때만 색인을 다시 만든다.
  * 색인은 조각 전체를 임베딩해서 Gemini 호출이 많으므로, 새 축제가 없으면 건너뛴다.
- * 끄려면 .env에 RAG_SCHEDULE_ENABLED=false
+ * 기본은 꺼져 있고, 켜려면 .env에 RAG_SCHEDULE_ENABLED=true
  */
 @Slf4j
 @Configuration
 @EnableScheduling
-@ConditionalOnProperty(name = "rag.schedule.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "rag.schedule.enabled", havingValue = "true")
 public class RagScheduler {
 
     private final FestivalSyncService festivalSyncService;
