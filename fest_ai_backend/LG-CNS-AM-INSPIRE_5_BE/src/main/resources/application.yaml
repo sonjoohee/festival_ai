@@ -67,7 +67,7 @@ rag:
   chunk-overlap: 50
   top-k: 4
   # 이 값보다 덜 비슷한 조각은 버린다. 남는 조각이 없으면 "정보가 없다"고 답한다.
-  similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.63}
+  similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.68}
 
 # OPEN API
 openapi:
