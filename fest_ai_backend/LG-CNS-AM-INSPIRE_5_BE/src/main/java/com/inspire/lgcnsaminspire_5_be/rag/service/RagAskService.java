@@ -152,6 +152,11 @@ public class RagAskService {
     private RagSourceDTO toSource(int number, Document doc) {
         Map<String, Object> meta = doc.getMetadata();
         String text = doc.getText() == null ? "" : doc.getText();
+        // 조각 맨 앞의 "[축제명] 기간 | 장소" 머리말은 검색용이라 미리보기에서는 빼고 본문부터 보여 준다
+        int firstLineEnd = text.indexOf('\n');
+        if (text.startsWith("[") && firstLineEnd > 0 && firstLineEnd < text.length() - 1) {
+            text = text.substring(firstLineEnd + 1);
+        }
         return RagSourceDTO.builder()
                 .number(number)
                 .sourceType(String.valueOf(meta.getOrDefault("sourceType", "")))

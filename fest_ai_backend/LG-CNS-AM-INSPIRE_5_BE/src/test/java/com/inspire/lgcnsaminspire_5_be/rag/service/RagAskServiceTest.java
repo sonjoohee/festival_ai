@@ -65,6 +65,8 @@ class RagAskServiceTest {
         assertThat(res.getSources()).isNotEmpty();
         assertThat(res.getSources().get(0).getTitle()).isEqualTo("보령머드축제");
         assertThat(res.getSources().get(0).getSourceId()).isEqualTo("100");
+        // 본문이 없는 조각은 머리말을 그대로 미리보기로 쓴다
+        assertThat(res.getSources().get(0).getSnippet()).startsWith("[보령머드축제]");
         assertThat(chatModel.prompts).hasSize(1);
         assertThat(chatModel.prompts.get(0)).contains("[1] [보령머드축제]", "[질문]", "보령머드축제 기간 알려줘");
     }
