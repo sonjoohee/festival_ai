@@ -54,6 +54,15 @@ spring:
 jwt:
     secret: ${JWT_SECRET_KEY}
 
+# RAG 질문 답변
+rag:
+  store-path: ${RAG_STORE_PATH:rag-data/vector-store.json}
+  chunk-size: 500
+  chunk-overlap: 50
+  top-k: 4
+  # 이 값보다 덜 비슷한 조각은 버린다. 남는 조각이 없으면 "정보가 없다"고 답한다.
+  similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.65}
+
 # OPEN API
 openapi:
     serviceKey: ${SERVICE_KEY}
