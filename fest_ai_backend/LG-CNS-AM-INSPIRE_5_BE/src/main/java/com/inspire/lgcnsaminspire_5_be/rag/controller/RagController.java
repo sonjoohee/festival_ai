@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.inspire.lgcnsaminspire_5_be.festival.domain.entity.FestivalEntity;
+import com.inspire.lgcnsaminspire_5_be.festival.repository.FestivalRepository;
 import com.inspire.lgcnsaminspire_5_be.rag.domain.dto.RagAskRequestDTO;
 import com.inspire.lgcnsaminspire_5_be.rag.service.FestivalSyncService;
 import com.inspire.lgcnsaminspire_5_be.rag.service.RagAskService;
@@ -28,12 +30,17 @@ public class RagController {
     private final RagAskService ragAskService;
     private final RagIndexService ragIndexService;
     private final FestivalSyncService festivalSyncService;
+    private final FestivalRepository festivalRepository;
 
     // 질문 답변 (로그인 없이 사용)
     @PostMapping("/ask")
     public ResponseEntity<?> ask(@Valid @RequestBody RagAskRequestDTO request) {
         try {
-            return ResponseEntity.ok(ragAskService.ask(request.getQuestion().strip(), request.getContentId()));
+            // 축제 이름은 화면이 보낸 값이 아니라 DB에서 찾는다
+            String contentId = request.getContentId();
+            String title = contentId == null || contentId.isBlank() ? null
+                    : festivalRepository.findByContentId(contentId.strip()).map(FestivalEntity::getTitle).orElse(null);
+            return ResponseEntity.ok(ragAskService.ask(request.getQuestion().strip(), contentId, title));
         } catch (RuntimeException e) {
             // 예외 메시지에는 외부 API 응답이 섞일 수 있어 클래스 이름만 남긴다
             log.error("RAG 질문 처리 실패: {}", e.getClass().getSimpleName());

@@ -97,11 +97,26 @@ class RagAskServiceTest {
         indexSamples();
         chatModel.reply = "답변 [1]";
 
-        RagAskResponseDTO other = service.ask("보령머드축제 기간 알려줘", "200");
-        RagAskResponseDTO same = service.ask("보령머드축제 기간 알려줘", "100");
+        RagAskResponseDTO other = service.ask("보령머드축제 기간 알려줘", "200", null);
+        RagAskResponseDTO same = service.ask("보령머드축제 기간 알려줘", "100", null);
 
         assertThat(other.isFound()).isFalse(); // 부산불꽃축제(200) 범위에는 머드축제 조각이 없다
         assertThat(same.getSources()).extracting(s -> s.getSourceId()).containsOnly("100");
+    }
+
+    @Test
+    void 상세_페이지에서는_축제_이름을_붙여_검색하고_프롬프트에도_알린다() {
+        indexSamples();
+        chatModel.reply = "7월 27일까지 합니다 [1]";
+
+        // 가짜 임베딩은 짧은 질문의 점수가 낮아서 이 테스트만 기준값을 낮춘다
+        RagAskService lowThreshold = new RagAskService(ChatClient.builder(chatModel).build(), holder, 2, 0.15);
+        RagAskResponseDTO withoutTitle = lowThreshold.ask("언제까지 해?", "100", null);
+        RagAskResponseDTO withTitle = lowThreshold.ask("언제까지 해?", "100", "보령머드축제");
+
+        assertThat(withoutTitle.isFound()).isFalse(); // 이름 없이는 조각과 겹치는 글자가 없다
+        assertThat(withTitle.isFound()).isTrue();
+        assertThat(chatModel.prompts.get(chatModel.prompts.size() - 1)).contains("'보령머드축제' 상세 페이지에서 나왔다");
     }
 
     @Test
@@ -109,9 +124,20 @@ class RagAskServiceTest {
         indexSamples();
         chatModel.reply = "답변 [1]";
 
-        RagAskResponseDTO res = service.ask("보령머드축제 기간 알려줘", "200' || sourceId == '100");
+        RagAskResponseDTO res = service.ask("보령머드축제 기간 알려줘", "200' || sourceId == '100", null);
 
         assertThat(res.isFound()).isFalse();
+    }
+
+    @Test
+    void 답변에_인용된_조각만_출처로_남긴다() {
+        List<com.inspire.lgcnsaminspire_5_be.rag.domain.dto.RagSourceDTO> sources = List.of(
+                com.inspire.lgcnsaminspire_5_be.rag.domain.dto.RagSourceDTO.builder().number(1).build(),
+                com.inspire.lgcnsaminspire_5_be.rag.domain.dto.RagSourceDTO.builder().number(2).build(),
+                com.inspire.lgcnsaminspire_5_be.rag.domain.dto.RagSourceDTO.builder().number(3).build());
+
+        assertThat(RagAskService.citedOnly("답 [2]. 또 답 [3]", sources)).extracting(s -> s.getNumber()).containsExactly(2, 3);
+        assertThat(RagAskService.citedOnly("인용 표시 없는 답", sources)).hasSize(3);
     }
 
     @Test

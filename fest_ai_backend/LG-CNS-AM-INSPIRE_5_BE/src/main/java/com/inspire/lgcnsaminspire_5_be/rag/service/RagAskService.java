@@ -3,6 +3,10 @@ package com.inspire.lgcnsaminspire_5_be.rag.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -25,6 +29,7 @@ public class RagAskService {
     public static final String NO_INFO_ANSWER = "등록된 축제 정보에서 관련 내용을 찾지 못해 답할 수 없습니다.";
     static final String NO_INFO_MARKER = "NO_INFO";
     private static final int SNIPPET_LENGTH = 120;
+    private static final Pattern CITATION = Pattern.compile("\\[(\\d+)]");
 
     private static final String SYSTEM_PROMPT = """
             너는 축제 정보 서비스의 안내 도우미다.
@@ -51,21 +56,24 @@ public class RagAskService {
     }
 
     public RagAskResponseDTO ask(String question) {
-        return ask(question, null);
+        return ask(question, null, null);
     }
 
     /**
-     * @param contentId 있으면 그 축제 조각과 FAQ 안에서만 찾는다 (상세 페이지 질문창용). 없으면 전체에서 찾는다.
+     * @param contentId     있으면 그 축제 조각과 FAQ 안에서만 찾는다 (상세 페이지 질문창용). 없으면 전체에서 찾는다.
+     * @param festivalTitle contentId 축제의 이름. 상세 페이지에서는 "언제까지 해?"처럼 이름 없이 묻기 때문에
+     *                      검색어와 프롬프트에 이름을 붙여 그 축제 얘기로 알아듣게 한다.
      */
-    public RagAskResponseDTO ask(String question, String contentId) {
+    public RagAskResponseDTO ask(String question, String contentId, String festivalTitle) {
         if (vectorStoreHolder.isEmpty()) {
             log.info("RAG 질문 - 색인된 문서가 없어 바로 정보 없음으로 답함");
             return noInfo();
         }
 
         // 1. 질문과 비슷한 조각 찾기 (기준값 미만은 버림)
+        boolean hasTitle = festivalTitle != null && !festivalTitle.isBlank();
         SearchRequest.Builder search = SearchRequest.builder()
-                .query(question)
+                .query(hasTitle ? festivalTitle.strip() + " " + question : question)
                 .topK(topK)
                 .similarityThreshold(similarityThreshold);
         if (contentId != null && !contentId.isBlank()) {
@@ -100,8 +108,9 @@ public class RagAskService {
                         [참고 문서]
                         %s
                         [질문]
-                        %s
-                        """.formatted(context, question))
+                        %s%s
+                        """.formatted(context, question,
+                        hasTitle ? "\n(이 질문은 '" + festivalTitle.strip() + "' 상세 페이지에서 나왔다)" : ""))
                 .options(ChatOptions.builder().temperature(0.2).build())
                 .call()
                 .content();
@@ -115,8 +124,21 @@ public class RagAskService {
         return RagAskResponseDTO.builder()
                 .answer(answer.strip())
                 .found(true)
-                .sources(sources)
+                .sources(citedOnly(answer, sources))
                 .build();
+    }
+
+    /** 답변에 [1], [2]로 인용된 조각만 출처로 남긴다. 인용 표시가 없으면 검색된 조각을 모두 보여 준다. */
+    static List<RagSourceDTO> citedOnly(String answer, List<RagSourceDTO> sources) {
+        Matcher m = CITATION.matcher(answer);
+        Set<Integer> cited = new java.util.HashSet<>();
+        while (m.find()) {
+            cited.add(Integer.parseInt(m.group(1)));
+        }
+        List<RagSourceDTO> filtered = sources.stream()
+                .filter(s -> cited.contains(s.getNumber()))
+                .collect(Collectors.toList());
+        return filtered.isEmpty() ? sources : filtered;
     }
 
     private RagAskResponseDTO noInfo() {
