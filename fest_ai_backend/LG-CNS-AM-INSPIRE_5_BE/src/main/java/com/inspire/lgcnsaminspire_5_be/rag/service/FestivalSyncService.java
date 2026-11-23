@@ -33,7 +33,8 @@ public class FestivalSyncService {
         int created = 0, skipped = 0, failed = 0;
         for (FestivalResponseDTO festival : listed.subList(0, Math.min(listed.size(), safeLimit))) {
             try {
-                if (festivalService.saveFromTourApiIfAbsent(festival.getContentId())) {
+                if (festivalService.saveFromTourApiIfAbsent(
+                        festival.getContentId(), festival.getStartDate(), festival.getEndDate())) {
                     created++;
                     Thread.sleep(CALL_INTERVAL_MILLIS);
                 } else {

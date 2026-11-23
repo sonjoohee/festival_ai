@@ -168,20 +168,21 @@ public class FestivalService {
         log.info(">>>> FestivalService findOrCreateFestival - contentId: {}", contentId);
 
         return festivalRepository.findByContentId(contentId)
-                .orElseGet(() -> festivalRepository.save(fetchFromTourApi(contentId, true)));
+                .orElseGet(() -> festivalRepository.save(fetchFromTourApi(contentId, true, null, null)));
     }
 
     /**
      * DB에 없는 축제만 TourAPI 상세 정보를 받아 저장한다. AI 꿀팁은 만들지 않는다.
      * 축제 여러 개를 한 번에 저장할 때 Gemini 호출이 축제 수만큼 늘어나지 않게 하려는 것.
+     * detailCommon2 응답에는 행사 기간이 없어서, 목록(searchFestival2)에서 받은 기간을 함께 넘긴다.
      * @return 새로 저장했으면 true, 이미 있으면 false
      */
     @Transactional
-    public boolean saveFromTourApiIfAbsent(String contentId) {
+    public boolean saveFromTourApiIfAbsent(String contentId, String startDate, String endDate) {
         if (festivalRepository.findByContentId(contentId).isPresent()) {
             return false;
         }
-        festivalRepository.save(fetchFromTourApi(contentId, false));
+        festivalRepository.save(fetchFromTourApi(contentId, false, startDate, endDate));
         return true;
     }
 
@@ -197,7 +198,8 @@ public class FestivalService {
     }
 
     // TourAPI detailCommon2로 축제 상세를 받아 엔티티로 만든다. 저장은 호출한 쪽에서 한다.
-    private FestivalEntity fetchFromTourApi(String contentId, boolean withAiInfo) {
+    private FestivalEntity fetchFromTourApi(String contentId, boolean withAiInfo,
+            String fallbackStartDate, String fallbackEndDate) {
         // 에러를 유발하던 Y/N 옵션 파라미터를 모두 제거하고 깨끗하게 호출
         String requestUrl = endPoint
                 + "detailCommon2"
@@ -230,6 +232,12 @@ public class FestivalService {
                     String overview = item.path("overview").asText("");
                     String startDate = item.path("eventstartdate").asText("");
                     String endDate = item.path("eventenddate").asText("");
+                    if (startDate.isBlank() && fallbackStartDate != null) {
+                        startDate = fallbackStartDate;
+                    }
+                    if (endDate.isBlank() && fallbackEndDate != null) {
+                        endDate = fallbackEndDate;
+                    }
 
                     String aiInfo = withAiInfo ? generateTipsSafely(title, overview) : null;
 
