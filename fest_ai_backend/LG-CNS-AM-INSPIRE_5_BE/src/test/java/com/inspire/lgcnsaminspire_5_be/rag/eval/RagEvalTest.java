@@ -32,11 +32,15 @@ import io.github.cdimascio.dotenv.Dotenv;
 /**
  * 평가 질문(src/test/resources/rag/eval-questions.json)으로 RAG가 몇 개를 맞히는지 잰다.
  *
- * 1단계: 질문마다 비슷한 조각 4개와 점수를 한 번만 받아 두고, 기준값을 바꿔 가며 정답 수를 센다.
- *        - answer 질문: 기준값 이상 조각 안에 기대한 출처(sourceId)가 있으면 정답
- *        - no_info 질문: 기준값 이상 조각이 하나도 없으면 정답 (검색 단계에서 막힘)
- * 2단계: 1단계에서 가장 많이 맞힌 기준값으로 실제 질문 답변 흐름(LLM 포함)을 돌린다.
- *        - no_info 질문은 검색을 통과해도 LLM이 NO_INFO를 내면 정답
+ * 질문 종류
+ *   - answer: 개요에 답이 있음. 기대한 출처(sourceId)를 찾아 답해야 정답
+ *   - no_info: 축제는 맞지만 개요에 답이 없음 (예: 주차장). 검색은 통과해도 되고 LLM이 NO_INFO를 내야 정답
+ *   - unrelated: 서비스와 상관없음 (예: 환율). 검색 단계에서 막혀야 정답
+ *
+ * 1단계: 질문마다 비슷한 조각 4개와 점수를 한 번만 받아 두고, 기준값을 바꿔 가며 answer와 unrelated 정답 수를 센다.
+ *        no_info는 검색 점수가 answer와 비슷하게 높아서 기준값으로 거를 대상이 아니므로 세지 않는다.
+ *        최고 점수가 여러 기준값에서 같으면 그 구간의 가운데 값을 고른다 (양쪽 질문과 거리를 비슷하게 둔다).
+ * 2단계: 고른 기준값으로 실제 질문 답변 흐름(LLM 포함)을 돌려 모든 질문을 채점한다.
  *
  * 실행: ./gradlew evalRag  (서버와 DB는 필요 없음. POST /api/rag/index 로 만든 색인 파일을 읽는다)
  */
@@ -49,6 +53,10 @@ class RagEvalTest {
     record EvalQuestion(String question, String expect, String sourceId) {
         boolean expectsAnswer() {
             return "answer".equals(expect);
+        }
+
+        boolean isUnrelated() {
+            return "unrelated".equals(expect);
         }
     }
 
@@ -69,7 +77,8 @@ class RagEvalTest {
                 .embeddingsPath(env.get("OPEN_AI_EMBEDDING_PATH", "/embeddings"))
                 .apiKey(apiKey)
                 .build();
-        RetryTemplate retry = RetryTemplate.builder().maxAttempts(3).fixedBackoff(3000).build();
+        // 평가는 기다려도 되므로 모델이 바쁠 때(503) 서버보다 오래 다시 시도한다
+        RetryTemplate retry = RetryTemplate.builder().maxAttempts(5).exponentialBackoff(2000, 2, 20000).build();
         OpenAiEmbeddingModel embeddingModel = new OpenAiEmbeddingModel(api, MetadataMode.EMBED,
                 OpenAiEmbeddingOptions.builder().model(env.get("OPEN_AI_EMBEDDING_MODEL", "gemini-embedding-001")).build(),
                 retry);
@@ -94,7 +103,7 @@ class RagEvalTest {
 
         StringBuilder report = new StringBuilder();
         long answerCount = questions.stream().filter(EvalQuestion::expectsAnswer).count();
-        long noInfoCount = questions.size() - answerCount;
+        long unrelatedCount = questions.stream().filter(EvalQuestion::isUnrelated).count();
         report.append("## 질문별 1순위 점수\n\n| 기대 | 1순위 점수 | 1순위 출처 | 기대 출처 | 질문 |\n| --- | --- | --- | --- | --- |\n");
         for (int i = 0; i < questions.size(); i++) {
             EvalQuestion q = questions.get(i);
@@ -104,13 +113,13 @@ class RagEvalTest {
         }
 
         report.append("\n## 1단계: 검색 단계 기준값별 정답 수\n\n")
-                .append("| 기준값 | answer 정답 (/%d) | no_info 막힘 (/%d) | 합계 |\n| --- | --- | --- | --- |\n"
-                        .formatted(answerCount, noInfoCount));
-        double bestThreshold = 0;
+                .append("| 기준값 | answer 찾음 (/%d) | unrelated 막힘 (/%d) | 합계 |\n| --- | --- | --- | --- |\n"
+                        .formatted(answerCount, unrelatedCount));
+        List<Double> bestThresholds = new ArrayList<>();
         int bestTotal = -1;
         for (int step = 50; step <= 80; step += 2) {
             double t = step / 100.0;
-            int answerOk = 0, noInfoOk = 0;
+            int answerOk = 0, unrelatedOk = 0;
             for (int i = 0; i < questions.size(); i++) {
                 EvalQuestion q = questions.get(i);
                 List<Hit> passed = hitsPerQuestion.get(i).stream().filter(h -> h.score() >= t).toList();
@@ -118,26 +127,38 @@ class RagEvalTest {
                     if (passed.stream().anyMatch(h -> h.sourceId().equals(q.sourceId()))) {
                         answerOk++;
                     }
-                } else if (passed.isEmpty()) {
-                    noInfoOk++;
+                } else if (q.isUnrelated() && passed.isEmpty()) {
+                    unrelatedOk++;
                 }
             }
-            int total = answerOk + noInfoOk;
-            report.append("| %.2f | %d | %d | %d |\n".formatted(t, answerOk, noInfoOk, total));
-            if (total > bestTotal) { // 같으면 낮은 기준값(답을 덜 놓치는 쪽)을 남긴다
+            int total = answerOk + unrelatedOk;
+            report.append("| %.2f | %d | %d | %d |\n".formatted(t, answerOk, unrelatedOk, total));
+            if (total > bestTotal) {
                 bestTotal = total;
-                bestThreshold = t;
+                bestThresholds.clear();
+            }
+            if (total == bestTotal) {
+                bestThresholds.add(t);
             }
         }
+        double bestThreshold = bestThresholds.get((bestThresholds.size() - 1) / 2);
 
         // 2단계: 고른 기준값으로 LLM까지 포함해 실제 답변 흐름을 돌린다
         double finalThreshold = Double.parseDouble(env.get("RAG_EVAL_THRESHOLD", String.valueOf(bestThreshold)));
         RagAskService askService = new RagAskService(ChatClient.builder(chatModel).build(), holder, TOP_K, finalThreshold);
         report.append("\n## 2단계: 기준값 %.2f로 LLM까지 돌린 결과\n\n| 기대 | 결과 | 맞음 | 질문 | 답변 |\n| --- | --- | --- | --- | --- |\n"
                 .formatted(finalThreshold));
-        int finalOk = 0;
+        int finalOk = 0, errors = 0;
         for (EvalQuestion q : questions) {
-            RagAskResponseDTO res = askService.ask(q.question());
+            RagAskResponseDTO res;
+            try {
+                res = askService.ask(q.question());
+            } catch (RuntimeException e) {
+                // 재시도해도 모델이 응답하지 않으면 이 질문만 에러로 적고 넘어간다
+                errors++;
+                report.append("| %s | 에러 | X | %s | %s |\n".formatted(q.expect(), q.question(), e.getClass().getSimpleName()));
+                continue;
+            }
             boolean ok = q.expectsAnswer()
                     ? res.isFound() && res.getSources().stream().anyMatch(s -> s.getSourceId().equals(q.sourceId()))
                     : !res.isFound();
@@ -151,7 +172,8 @@ class RagEvalTest {
                 Thread.sleep(LLM_INTERVAL_MILLIS);
             }
         }
-        report.append("\n**최종: 질문 %d개 중 %d개 정답 (기준값 %.2f)**\n".formatted(questions.size(), finalOk, finalThreshold));
+        report.append("\n**최종: 질문 %d개 중 %d개 정답 (기준값 %.2f, 모델 응답 에러 %d개)**\n"
+                .formatted(questions.size(), finalOk, finalThreshold, errors));
 
         Path out = Path.of("build/reports/rag-eval.md");
         Files.createDirectories(out.getParent());
