@@ -1,0 +1,27 @@
+[
+  { "question": "해운대 빛축제 언제까지 해?", "expect": "answer", "sourceId": "2048902" },
+  { "question": "숭례문 파수의식 월요일에도 볼 수 있어?", "expect": "answer", "sourceId": "3107059" },
+  { "question": "포천펫스타에서 강아지랑 뭐 할 수 있어?", "expect": "answer", "sourceId": "3545306" },
+  { "question": "논산 곶감축제 몇 시까지 해?", "expect": "answer", "sourceId": "1139979" },
+  { "question": "부산브릿지마라톤 풀코스 참가 조건이 뭐야?", "expect": "answer", "sourceId": "4095478" },
+  { "question": "크리스마스 빌리지 부산 입장 무료야?", "expect": "answer", "sourceId": "3437916" },
+  { "question": "청계천의 빛 기간 알려줘", "expect": "answer", "sourceId": "2785797" },
+  { "question": "울산 크리스마스 마켓 어디서 열려?", "expect": "answer", "sourceId": "3578130" },
+  { "question": "허그런 마라톤 언제 어디서 해?", "expect": "answer", "sourceId": "4108260" },
+  { "question": "비건 할랄 뷰티페어 장소가 어디야?", "expect": "answer", "sourceId": "3367405" },
+  { "question": "함평 겨울빛축제 기간은?", "expect": "answer", "sourceId": "3432658" },
+  { "question": "과학영재교육 페스티벌은 언제 열려?", "expect": "answer", "sourceId": "2802077" },
+  { "question": "인천공항에서 볼 수 있는 전통 행사 있어?", "expect": "answer", "sourceId": "2433596" },
+  { "question": "찜하기는 어떻게 해?", "expect": "answer", "sourceId": "service-faq.md" },
+  { "question": "후기는 아무나 쓸 수 있어?", "expect": "answer", "sourceId": "service-faq.md" },
+
+  { "question": "해운대 빛축제 주차장 어디야?", "expect": "no_info" },
+  { "question": "숭례문 파수의식 관람료 얼마야?", "expect": "no_info" },
+  { "question": "부산브릿지마라톤 참가비 얼마야?", "expect": "no_info" },
+  { "question": "논산 곶감축제 가는 셔틀버스 있어?", "expect": "no_info" },
+
+  { "question": "오늘 달러 환율 얼마야?", "expect": "unrelated" },
+  { "question": "파이썬 리스트 정렬하는 법 알려줘", "expect": "unrelated" },
+  { "question": "내일 서울 날씨 어때?", "expect": "unrelated" },
+  { "question": "제주도 감귤 따기 체험 언제 해?", "expect": "unrelated" }
+]

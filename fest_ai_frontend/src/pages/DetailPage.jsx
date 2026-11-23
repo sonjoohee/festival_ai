@@ -11,6 +11,7 @@ import FestivalDetailInfo from '../features/festivals/FestivalDetailInfo.jsx';
 import AiSummaryBox from '../features/bookmarks/AiSummaryBox.jsx';
 import BookmarkButton from '../features/bookmarks/BookmarkButton.jsx';
 import FestivalReviews from '../features/festivals/FestivalReviews.jsx';
+import RagAskBox from '../features/rag/RagAskBox.jsx';
 
 
 const DetailPage = () => {
@@ -120,6 +121,7 @@ const DetailPage = () => {
                 summary={festival?.aiInfo?.split('\n') || []}
                 loading={isLoading}
               />
+              <RagAskBox contentId={festivalId} festivalTitle={festival?.title} />
               <FestivalReviews festivalId={festivalId} />
               <BookmarkSection>
                 <BookmarkButtonWrapper

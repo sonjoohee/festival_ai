@@ -14,11 +14,26 @@ spring:
 
 
   ai:
+    # 모델이 바쁠 때(503, 429) 기본 10번 재시도하면 응답이 몇 분씩 늦어진다. 2번까지만 하고 실패를 돌려준다.
+    retry:
+      max-attempts: 2
+      backoff:
+        initial-interval: 1s
+        max-interval: 3s
+    # Gemini를 OpenAI 호환 주소로 호출한다. 키는 .env의 OPEN_AI_KEY에 Gemini 키를 넣는다.
+    # OpenAI로 되돌리려면 .env에서 OPEN_AI_BASE_URL=https://api.openai.com,
+    # OPEN_AI_CHAT_PATH=/v1/chat/completions, OPEN_AI_EMBEDDING_PATH=/v1/embeddings 로 바꾼다.
     openai:
       api-key: ${OPEN_AI_KEY}
+      base-url: ${OPEN_AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
       chat:
+        completions-path: ${OPEN_AI_CHAT_PATH:/chat/completions}
         options:
-          model: ${OPEN_AI_MODEL}
+          model: ${OPEN_AI_MODEL:gemini-3.1-flash-lite}
+      embedding:
+        embeddings-path: ${OPEN_AI_EMBEDDING_PATH:/embeddings}
+        options:
+          model: ${OPEN_AI_EMBEDDING_MODEL:gemini-embedding-001}
 
   jpa:
     hibernate:
@@ -44,6 +59,21 @@ spring:
 
 jwt:
     secret: ${JWT_SECRET_KEY}
+
+# RAG 질문 답변
+rag:
+  store-path: ${RAG_STORE_PATH:rag-data/vector-store.json}
+  chunk-size: 500
+  chunk-overlap: 50
+  top-k: 4
+  # 이 값보다 덜 비슷한 조각은 버린다. 남는 조각이 없으면 "정보가 없다"고 답한다.
+  similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.68}
+  # 매일 새벽 TourAPI에서 축제를 받아 저장하고, 새 축제가 있으면 색인을 다시 만든다
+  # 기본은 꺼짐. 켜려면 .env에 RAG_SCHEDULE_ENABLED=true
+  schedule:
+    enabled: ${RAG_SCHEDULE_ENABLED:false}
+    cron: ${RAG_SCHEDULE_CRON:0 10 4 * * *}   # 초 분 시 일 월 요일 (매일 04:10, 한국 시간)
+    sync-limit: 200
 
 # OPEN API
 openapi:

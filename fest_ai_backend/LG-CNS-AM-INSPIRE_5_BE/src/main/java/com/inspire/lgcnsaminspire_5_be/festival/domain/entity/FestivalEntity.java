@@ -42,4 +42,9 @@ public class FestivalEntity {
 
     @Column(name = "end_date", length = 8)
     private String endDate;
+
+    // 한 번에 저장한 축제는 꿀팁 없이 들어오므로, 상세 페이지를 처음 열 때 채운다
+    public void updateAiInfo(String aiInfo) {
+        this.aiInfo = aiInfo;
+    }
 }
